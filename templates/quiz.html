@@ -22,7 +22,7 @@
  
 <form method="post" onsubmit="return submitAnswer()">
     <div class="input-wrap">
-        <input type="text" name="answer" id="answer-input" placeholder="올바른 순서로 입력하세요" autocomplete="off" autofocus required oninput="updateCount()">
+        <textarea name="answer" id="answer-input" rows="8" placeholder="올바른 순서로 입력하세요" autocomplete="off" autofocus required oninput="updateCount()"></textarea>
         <span class="count-badge" id="word-count">0 / <span id="wc-total">0</span></span>
     </div>
     <button type="submit">제출</button>
@@ -36,6 +36,7 @@ document.getElementById('wc-total').textContent = totalWords;
  
 function toggleWord(el) {
     el.classList.toggle('used');
+    document.getElementById('answer-input').focus();
 }
  
 function updateCount() {
@@ -46,9 +47,9 @@ function updateCount() {
 }
  
 function submitAnswer() {
-    // 제출 전 모든 chip 원상복귀
     chips.forEach(c => c.classList.remove('used'));
     return true;
 }
 </script>
 {% endblock %}
+ 
