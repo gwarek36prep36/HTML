@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>🔀 섞인 문장</h1>
+<div class="progress">문제 {{ progress }} / {{ total }}</div>
+
+{% if feedback %}
+    <div class="feedback {{ 'correct' if is_correct else 'wrong' }}">
+        {{ feedback }}
+        {% if correct_answer %}
+        <span class="correct-answer">정답: {{ correct_answer }}</span>
+        {% endif %}
+    </div>
+{% endif %}
+
+<div class="shuffled-box">
+    {% for word in shuffled %}
+        <span class="word-chip">{{ word }}</span>
+    {% endfor %}
+</div>
+
+<form method="post">
+    <input type="text" name="answer" placeholder="올바른 순서로 입력하세요" autocomplete="off" autofocus required>
+    <button type="submit">제출</button>
+</form>
+{% endblock %}
