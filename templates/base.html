@@ -120,18 +120,6 @@
         pointer-events: none;
     }
  
-    .word-chip {
-        cursor: pointer;
-        user-select: none;
-        transition: background 0.15s, color 0.15s;
-    }
- 
-    .word-chip.used {
-        background: #555;
-        color: #fff;
-        border-color: #444;
-    }
- 
     .shuffled-box {
         background: #f7f6fb;
         border-radius: 14px;
@@ -151,6 +139,15 @@
         font-size: 15px;
         color: #555;
         font-weight: 500;
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.15s, color 0.15s;
+    }
+ 
+    .word-chip.used {
+        background: #555;
+        color: #fff;
+        border-color: #444;
     }
  
     .feedback {
@@ -223,3 +220,4 @@
     </div>
 </body>
 </html>
+ 
