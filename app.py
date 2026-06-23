@@ -128,6 +128,11 @@ def retry():
     start_round(wrong)
     return redirect(url_for('quiz'))
 
+# 맨 아래 기존 코드 위에 붙이기
+@app.route('/fill')
+def fill():
+    return render_template('fill.html')
+
 
 if __name__ == '__main__':
     app.run(debug=True)
