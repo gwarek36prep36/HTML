@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}문장 빈칸 채우기{% endblock %}
+{% block content %}
+<h1>✏️ 빈칸 채우기</h1>
+<p class="subtitle">지문(여러 문장)을 붙여넣으면 문장 단위로 끊어서 빈칸 퀴즈를 만들어줘요. 각 문장에서 단어의 절반을 숨깁니다.</p>
+
+<label for="textInput">지문 입력:</label><br>
+<textarea id="textInput" rows="5" placeholder="여기에 문단을 입력하세요..."></textarea><br><br>
+<label><input type="checkbox" id="scrambleCheckbox"> 단어 순서를 섞기</label><br><br>
+<button id="startButton">시작하기</button>
+
+<div id="gameArea"></div>
+
+<style>
+.sentence { margin-bottom: 10px; font-size: 1.2em; }
+.result { margin-top: 10px; font-weight: bold; }
+</style>
+<script>
+(function() {
+  const startButton = document.getElementById('startButton');
+  const textInput = document.getElementById('textInput');
+  const scrambleCheckbox = document.getElementById('scrambleCheckbox');
+  const gameArea = document.getElementById('gameArea');
+
+  let sentences = [];
+  let currentIndex = 0;
+  let scramble = false;
+  let currentWords = [];
+  let currentBlankIndices = [];
+
+  function splitSentences(text) {
+    return text.split(/[.!?]/).map(s => s.trim()).filter(s => s.length > 0);
+  }
+
+  function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+  }
+
+  function blankifyWords(words) {
+    const total = words.length;
+    const numBlanks = Math.round(total * 0.5);
+    const indices = Array.from({length: total}, (_, i) => i);
+    shuffle(indices);
+    const blankIndices = indices.slice(0, numBlanks).sort((a, b) => a - b);
+    const blanked = words.map((word, idx) => blankIndices.includes(idx) ? '__' : word);
+    return { blanked, blankIndices };
+  }
+
+  function showSentence() {
+    gameArea.innerHTML = '';
+    if (currentIndex >= sentences.length) {
+      const endMessage = document.createElement('div');
+      endMessage.className = 'result';
+      endMessage.textContent = '게임이 끝났습니다!';
+      gameArea.appendChild(endMessage);
+      return;
+    }
+    const originalSentence = sentences[currentIndex];
+    currentWords = scramble ? shuffle(originalSentence.split(/\s+/).slice()) : originalSentence.split(/\s+/);
+    const { blanked, blankIndices } = blankifyWords(currentWords);
+    currentBlankIndices = blankIndices;
+
+    const sentenceDiv = document.createElement('div');
+    sentenceDiv.className = 'sentence';
+    sentenceDiv.textContent = blanked.join(' ');
+    gameArea.appendChild(sentenceDiv);
+
+    const inputLabel = document.createElement('label');
+    inputLabel.textContent = `빈칸에 들어갈 단어를 공백으로 구분하여 입력하세요 (${blankIndices.length}개):`;
+    gameArea.appendChild(inputLabel);
+    gameArea.appendChild(document.createElement('br'));
+
+    const guessInput = document.createElement('input');
+    guessInput.type = 'text';
+    guessInput.style.width = '80%';
+    gameArea.appendChild(guessInput);
+
+    const checkButton = document.createElement('button');
+    checkButton.textContent = '확인';
+    gameArea.appendChild(checkButton);
+
+    const resultDiv = document.createElement('div');
+    resultDiv.className = 'result';
+    gameArea.appendChild(resultDiv);
+
+    checkButton.addEventListener('click', function() {
+      const guesses = guessInput.value.trim().split(/\s+/);
+      if (guesses.length !== currentBlankIndices.length) {
+        resultDiv.textContent = `입력한 단어의 개수가 맞지 않습니다. ${currentBlankIndices.length}개의 단어를 입력해주세요.`;
+        resultDiv.style.color = 'red';
+        return;
+      }
+      let allCorrect = true;
+      let wrongDetails = [];
+      currentBlankIndices.forEach((idx, i) => {
+        if (guesses[i] === currentWords[idx]) {
+          // correct
+        } else {
+          allCorrect = false;
+          wrongDetails.push({ guess: guesses[i], correct: currentWords[idx] });
+        }
+      });
+      if (allCorrect) {
+        resultDiv.textContent = '정답!';
+        resultDiv.style.color = 'green';
+      } else {
+        const wrongMsgs = wrongDetails.map(item => `입력한 단어 '${item.guess}' → 정답 '${item.correct}'`).join(', ');
+        resultDiv.textContent = `틀렸습니다. ${wrongMsgs}`;
+        resultDiv.style.color = 'red';
+      }
+      setTimeout(function() {
+        currentIndex++;
+        showSentence();
+      }, 1500);
+    });
+  }
+
+  startButton.addEventListener('click', function() {
+    const text = textInput.value.trim();
+    if (!text) {
+      alert('먼저 지문을 입력해주세요.');
+      return;
+    }
+    sentences = splitSentences(text);
+    if (sentences.length === 0) {
+      alert('지문에서 문장을 찾을 수 없습니다. . ! ? 로 끝나는 문장을 입력하세요.');
+      return;
+    }
+    scramble = scrambleCheckbox.checked;
+    currentIndex = 0;
+    showSentence();
+  });
+})();
+</script>
+{% endblock %}
