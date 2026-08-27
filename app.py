@@ -1,7 +1,7 @@
 import os
 import random
 
-import psycopg
+import psycopg2
 from flask import Flask, render_template, request, session, redirect, url_for
 
 
