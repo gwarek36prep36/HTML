@@ -1,11 +1,15 @@
 import os
 import random
-
 import psycopg2
+
 from flask import Flask, render_template, request, session, redirect, url_for
 
 
 app = Flask(__name__)
+
+# =========================================================
+# 기본 설정
+# =========================================================
 
 app.secret_key = os.environ.get(
     "SECRET_KEY",
@@ -14,7 +18,7 @@ app.secret_key = os.environ.get(
 
 
 # =========================================================
-# 데이터베이스 연결
+# 데이터베이스
 # =========================================================
 
 def get_db():
@@ -25,13 +29,15 @@ def get_db():
             "DATABASE_URL 환경변수가 설정되지 않았습니다."
         )
 
-    return psycopg.connect(database_url)
+    return psycopg2.connect(database_url)
 
 
 def init_db():
     conn = get_db()
 
-    with conn.cursor() as cur:
+    try:
+        cur = conn.cursor()
+
         cur.execute("""
             CREATE TABLE IF NOT EXISTS passages (
                 id SERIAL PRIMARY KEY,
@@ -40,14 +46,19 @@ def init_db():
             )
         """)
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+        cur.close()
+
+    finally:
+        conn.close()
 
 
 def get_passages(limit=10):
     conn = get_db()
 
-    with conn.cursor() as cur:
+    try:
+        cur = conn.cursor()
+
         cur.execute("""
             SELECT id, text, created_at
             FROM passages
@@ -57,9 +68,12 @@ def get_passages(limit=10):
 
         passages = cur.fetchall()
 
-    conn.close()
+        cur.close()
 
-    return passages
+        return passages
+
+    finally:
+        conn.close()
 
 
 # =========================================================
@@ -67,13 +81,16 @@ def get_passages(limit=10):
 # =========================================================
 
 def make_sentences(text):
-    text = text.replace("?", ".").replace("!", ".")
+
+    text = text.replace("?", ".")
+    text = text.replace("!", ".")
 
     raw = text.split(".")
 
     sentences = []
 
     for sentence in raw:
+
         sentence = sentence.strip()
 
         if sentence:
@@ -83,10 +100,11 @@ def make_sentences(text):
 
 
 # =========================================================
-# 게임 시작
+# 게임 라운드 시작
 # =========================================================
 
 def start_round(sentences):
+
     session["sentences"] = sentences
     session["current"] = 0
     session["correct"] = 0
@@ -103,11 +121,15 @@ def index():
 
     if request.method == "POST":
 
-        text = request.form.get("text", "").strip()
+        text = request.form.get(
+            "text",
+            ""
+        ).strip()
 
         sentences = make_sentences(text)
 
         if not sentences:
+
             return render_template(
                 "index.html",
                 error="문장을 입력해주세요.",
@@ -116,7 +138,9 @@ def index():
 
         start_round(sentences)
 
-        return redirect(url_for("quiz"))
+        return redirect(
+            url_for("quiz")
+        )
 
     passages = get_passages()
 
@@ -136,13 +160,27 @@ def quiz():
     sentences = session.get("sentences")
 
     if not sentences:
-        return redirect(url_for("index"))
 
-    current = session.get("current", 0)
-    total = session.get("total", len(sentences))
+        return redirect(
+            url_for("index")
+        )
 
+    current = session.get(
+        "current",
+        0
+    )
+
+    total = session.get(
+        "total",
+        len(sentences)
+    )
+
+    # 이미 모든 문제를 풀었을 경우
     if current >= total:
-        return redirect(url_for("result"))
+
+        return redirect(
+            url_for("result")
+        )
 
     feedback = None
     correct_answer = None
@@ -154,18 +192,25 @@ def quiz():
 
     if request.method == "POST":
 
-        user_input = request.form.get("answer", "").strip()
+        user_input = request.form.get(
+            "answer",
+            ""
+        ).strip()
 
         answer_sentence = sentences[current]
 
         user_words = user_input.split()
         answer_words = answer_sentence.split()
 
-        is_correct = user_words == answer_words
+        is_correct = (
+            user_words == answer_words
+        )
 
         if is_correct:
 
-            session["correct"] = session.get("correct", 0) + 1
+            session["correct"] = (
+                session.get("correct", 0) + 1
+            )
 
             feedback = "정답!"
 
@@ -175,9 +220,14 @@ def quiz():
 
             correct_answer = answer_sentence
 
-            wrong = session.get("wrong", [])
+            wrong = session.get(
+                "wrong",
+                []
+            )
 
-            wrong.append(answer_sentence)
+            wrong.append(
+                answer_sentence
+            )
 
             session["wrong"] = wrong
 
@@ -193,9 +243,17 @@ def quiz():
 
             return render_template(
                 "result.html",
-                correct=session.get("correct", 0),
+                correct=session.get(
+                    "correct",
+                    0
+                ),
                 total=total,
-                wrong_count=len(session.get("wrong", [])),
+                wrong_count=len(
+                    session.get(
+                        "wrong",
+                        []
+                    )
+                ),
                 feedback=feedback,
                 is_correct=is_correct,
                 correct_answer=correct_answer
@@ -213,10 +271,12 @@ def quiz():
 
     random.shuffle(shuffled)
 
+    progress = current + 1
+
     return render_template(
         "quiz.html",
         shuffled=shuffled,
-        progress=current + 1,
+        progress=progress,
         total=total,
         feedback=feedback,
         is_correct=is_correct,
@@ -231,12 +291,21 @@ def quiz():
 @app.route("/result")
 def result():
 
-    correct = session.get("correct", 0)
+    correct = session.get(
+        "correct",
+        0
+    )
 
-    total = session.get("total", 0)
+    total = session.get(
+        "total",
+        0
+    )
 
     wrong_count = len(
-        session.get("wrong", [])
+        session.get(
+            "wrong",
+            []
+        )
     )
 
     return render_template(
@@ -254,14 +323,22 @@ def result():
 @app.route("/retry")
 def retry():
 
-    wrong = session.get("wrong", [])
+    wrong = session.get(
+        "wrong",
+        []
+    )
 
     if not wrong:
-        return redirect(url_for("index"))
+
+        return redirect(
+            url_for("index")
+        )
 
     start_round(wrong)
 
-    return redirect(url_for("quiz"))
+    return redirect(
+        url_for("quiz")
+    )
 
 
 # =========================================================
@@ -271,7 +348,9 @@ def retry():
 @app.route("/fill")
 def fill():
 
-    return render_template("fill.html")
+    return render_template(
+        "fill.html"
+    )
 
 
 # =========================================================
@@ -283,7 +362,9 @@ def passage_game(passage_id):
 
     conn = get_db()
 
-    with conn.cursor() as cur:
+    try:
+
+        cur = conn.cursor()
 
         cur.execute(
             """
@@ -296,28 +377,47 @@ def passage_game(passage_id):
 
         result = cur.fetchone()
 
-    conn.close()
+        cur.close()
+
+    finally:
+
+        conn.close()
 
     if result is None:
-        return redirect(url_for("passages"))
+
+        return redirect(
+            url_for("passages")
+        )
 
     text = result[0]
 
-    sentences = make_sentences(text)
+    sentences = make_sentences(
+        text
+    )
 
     if not sentences:
-        return redirect(url_for("passages"))
 
-    start_round(sentences)
+        return redirect(
+            url_for("passages")
+        )
 
-    return redirect(url_for("quiz"))
+    start_round(
+        sentences
+    )
+
+    return redirect(
+        url_for("quiz")
+    )
 
 
 # =========================================================
-# 지문 저장 / 관리
+# 지문 추가 / 관리
 # =========================================================
 
-@app.route("/passages", methods=["GET", "POST"])
+@app.route(
+    "/passages",
+    methods=["GET", "POST"]
+)
 def passages():
 
     # -----------------------------------------------------
@@ -326,13 +426,18 @@ def passages():
 
     if request.method == "POST":
 
-        text = request.form.get("text", "").strip()
+        text = request.form.get(
+            "text",
+            ""
+        ).strip()
 
         if text:
 
             conn = get_db()
 
-            with conn.cursor() as cur:
+            try:
+
+                cur = conn.cursor()
 
                 cur.execute(
                     """
@@ -342,16 +447,43 @@ def passages():
                     (text,)
                 )
 
-            conn.commit()
-            conn.close()
+                conn.commit()
 
-        return redirect(url_for("passages"))
+                cur.close()
+
+            finally:
+
+                conn.close()
+
+        return redirect(
+            url_for("passages")
+        )
 
     # -----------------------------------------------------
-    # 지문 목록
+    # 저장된 지문 불러오기
     # -----------------------------------------------------
 
-    saved_passages = get_passages(limit=1000)
+    conn = get_db()
+
+    try:
+
+        cur = conn.cursor()
+
+        cur.execute(
+            """
+            SELECT id, text, created_at
+            FROM passages
+            ORDER BY id DESC
+            """
+        )
+
+        saved_passages = cur.fetchall()
+
+        cur.close()
+
+    finally:
+
+        conn.close()
 
     return render_template(
         "passages.html",
@@ -371,7 +503,9 @@ def delete_passage(passage_id):
 
     conn = get_db()
 
-    with conn.cursor() as cur:
+    try:
+
+        cur = conn.cursor()
 
         cur.execute(
             """
@@ -381,31 +515,50 @@ def delete_passage(passage_id):
             (passage_id,)
         )
 
-    conn.commit()
-    conn.close()
+        conn.commit()
 
-    return redirect(url_for("passages"))
+        cur.close()
+
+    finally:
+
+        conn.close()
+
+    return redirect(
+        url_for("passages")
+    )
 
 
 # =========================================================
-# 서버 시작 시 DB 초기화
+# DB 초기화
 # =========================================================
 
 try:
+
     init_db()
 
 except Exception as e:
-    print("DB 초기화 실패:", e)
+
+    print(
+        "DB 초기화 실패:",
+        e
+    )
 
 
 # =========================================================
-# 로컬 실행
+# 로컬 / Render 실행
 # =========================================================
 
 if __name__ == "__main__":
 
+    port = int(
+        os.environ.get(
+            "PORT",
+            5000
+        )
+    )
+
     app.run(
         host="0.0.0.0",
-        port=int(os.environ.get("PORT", 5000)),
+        port=port,
         debug=False
     )
