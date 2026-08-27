@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}
+지문 관리
+{% endblock %}
+
+
+{% block content %}
+
+<h1>📚 지문 관리</h1>
+
+
+<p class="subtitle">
+    지문을 저장해두고 나중에 다시 사용할 수 있어요.
+</p>
+
+
+<!-- 지문 추가 -->
+
+<form method="post">
+
+
+    <textarea
+        name="text"
+        rows="8"
+        placeholder="저장할 지문을 입력하세요."
+        required
+    ></textarea>
+
+
+    <button type="submit">
+        💾 지문 저장
+    </button>
+
+
+</form>
+
+
+<hr
+    style="
+        margin: 30px 0;
+        border: none;
+        border-top: 1px solid #eee;
+    "
+>
+
+
+<h2
+    style="
+        font-size: 18px;
+        margin-bottom: 15px;
+    "
+>
+    저장된 지문
+</h2>
+
+
+{% if passages %}
+
+
+    {% for passage in passages %}
+
+
+        <div
+            style="
+                background:#f7f6fb;
+                border-radius:12px;
+                padding:16px;
+                margin-bottom:12px;
+            "
+        >
+
+
+            <div
+                style="
+                    font-size:13px;
+                    color:#999;
+                    margin-bottom:8px;
+                "
+            >
+                지문 {{ passage[0] }}
+            </div>
+
+
+            <div
+                style="
+                    color:#444;
+                    line-height:1.6;
+                    margin-bottom:12px;
+                    white-space:pre-wrap;
+                "
+            >
+                {{ passage[1] }}
+            </div>
+
+
+            <!-- 이 지문으로 시작 -->
+
+            <a
+                href="{{ url_for(
+                    'passage_game',
+                    passage_id=passage[0]
+                ) }}"
+            >
+
+                <button type="button">
+                    ▶️ 이 지문으로 시작
+                </button>
+
+            </a>
+
+
+            <!-- 삭제 -->
+
+            <form
+                method="post"
+                action="{{ url_for(
+                    'delete_passage',
+                    passage_id=passage[0]
+                ) }}"
+                onsubmit="
+                    return confirm(
+                        '이 지문을 삭제할까요?'
+                    );
+                "
+            >
+
+                <button
+                    type="submit"
+                    class="secondary-btn"
+                    style="margin-top:8px;"
+                >
+                    🗑️ 삭제
+                </button>
+
+            </form>
+
+
+        </div>
+
+
+    {% endfor %}
+
+
+{% else %}
+
+
+    <p
+        style="
+            text-align:center;
+            color:#999;
+            padding:30px 0;
+        "
+    >
+        아직 저장된 지문이 없습니다.
+    </p>
+
+
+{% endif %}
+
+
+<a href="/">
+
+    <button
+        type="button"
+        class="secondary-btn"
+    >
+        처음으로
+    </button>
+
+</a>
+
+
+{% endblock %}
