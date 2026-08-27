@@ -1,17 +1,174 @@
 {% extends "base.html" %}
-{% block content %}
-<h1>📝 문장 순서 맞추기</h1>
-<p class="subtitle">지문(여러 문장)을 통째로 붙여넣으면 문장 단위로 끊어서 퀴즈를 만들어줘요</p>
 
-<!-- 빈칸 퀴즈 링크 -->
-<a href="/fill"><button type="button">✏️ 빈칸 퀴즈 시작하기</button></a>
+{% block title %}
+문장 순서 맞추기
+{% endblock %}
+
+
+{% block content %}
+
+<h1>📝 문장 순서 맞추기</h1>
+
+<p class="subtitle">
+    지문(여러 문장)을 통째로 붙여넣으면
+    문장 단위로 끊어서 퀴즈를 만들어줘요
+</p>
+
+
+<!-- 빈칸 퀴즈 -->
+
+<a href="/fill">
+
+    <button type="button">
+        ✏️ 빈칸 퀴즈 시작하기
+    </button>
+
+</a>
+
 
 {% if error %}
-<div class="error">{{ error }}</div>
+
+<div class="error">
+    {{ error }}
+</div>
+
 {% endif %}
 
+
+<!-- 직접 지문 입력 -->
+
 <form method="post">
-    <textarea name="text" rows="10" placeholder="여기에 지문을 붙여넣으세요. 마침표(.)나 느낌표(!), 물음표(?)로 문장이 나뉩니다." required></textarea>
-    <button type="submit">퀴즈 시작하기</button>
+
+    <textarea
+        name="text"
+        rows="10"
+        placeholder="여기에 지문을 붙여넣으세요. 마침표(.)나 느낌표(!), 물음표(?)로 문장이 나뉩니다."
+        required
+    ></textarea>
+
+
+    <button type="submit">
+        퀴즈 시작하기
+    </button>
+
 </form>
+
+
+{% endblock %}
+
+
+
+{% block sidebar %}
+
+<div class="passage-sidebar">
+
+
+    <h2>
+        📚 지문 보관함
+    </h2>
+
+
+    <p class="passage-sidebar-subtitle">
+        저장한 지문을 바로 선택하세요
+    </p>
+
+
+    <!-- 추가 / 관리 -->
+
+    <a href="/passages">
+
+        <button
+            type="button"
+            class="passage-add-btn"
+        >
+            ＋ 지문 추가 / 관리
+        </button>
+
+    </a>
+
+
+    <!-- 저장된 지문 -->
+
+    <div class="passage-list">
+
+
+        {% if passages %}
+
+
+            {% for passage in passages %}
+
+
+                <div class="passage-item">
+
+
+                    <div class="passage-item-title">
+                        지문 {{ passage[0] }}
+                    </div>
+
+
+                    <div class="passage-item-text">
+                        {{ passage[1] }}
+                    </div>
+
+
+                    <a
+                        href="{{ url_for(
+                            'passage_game',
+                            passage_id=passage[0]
+                        ) }}"
+                    >
+
+                        <button
+                            type="button"
+                            class="passage-select-btn"
+                        >
+                            ▶ 선택
+                        </button>
+
+                    </a>
+
+
+                </div>
+
+
+            {% endfor %}
+
+
+        {% else %}
+
+
+            <div
+                style="
+                    text-align:center;
+                    color:#aaa;
+                    font-size:12px;
+                    padding:20px 5px;
+                "
+            >
+                저장된 지문이 없습니다.
+            </div>
+
+
+        {% endif %}
+
+
+    </div>
+
+
+    <!-- 전체 관리 -->
+
+    <a href="/passages">
+
+        <button
+            type="button"
+            class="passage-manage-btn"
+        >
+            지문 전체 관리
+        </button>
+
+    </a>
+
+
+</div>
+
 {% endblock %}
