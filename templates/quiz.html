@@ -6,6 +6,9 @@
 
 {% block content %}
 
+<!-- 부드러운 모바일 드래그 앤 드롭을 위한 SortableJS 라이브러리 추가 -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+
 <style>
   /* 상단 및 하단 박스 공통 스타일 */
   .shuffled-box,
@@ -17,11 +20,11 @@
     background-color: #f8fafc;
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 10px;
     align-items: center;
     margin-bottom: 20px;
     transition: background-color 0.2s, border-color 0.2s;
-    touch-action: manipulation;
+    touch-action: none; /* 터치 스크롤 방지하여 드래그에 집중 */
   }
 
   /* 답란 영역 강조 */
@@ -31,41 +34,42 @@
     background-color: #ffffff;
   }
 
-  .drop-target-area.drag-over,
-  .shuffled-box.drag-over {
-    background-color: #eff6ff;
-    border-color: #3b82f6;
-  }
-
-  /* 단어 칩 기본 스타일 - 터치 친화적 패딩 및 모바일 선택 방지 */
+  /* 단어 칩 스타일 */
   .word-chip {
     display: inline-flex;
     align-items: center;
-    padding: 10px 16px;
+    padding: 10px 18px;
     background-color: #3b82f6;
     color: white;
+    font-size: 1rem;
     font-weight: 600;
     border-radius: 20px;
-    cursor: pointer;
+    cursor: grab;
     user-select: none;
     -webkit-user-select: none;
-    -webkit-touch-callout: none;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-    transition: transform 0.15s, opacity 0.15s, background-color 0.2s;
-    touch-action: none;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.12);
+    transition: transform 0.15s ease, background-color 0.2s ease, box-shadow 0.2s ease;
   }
 
   .word-chip:active {
-    transform: scale(1.05);
-  }
-
-  .word-chip.dragging {
-    opacity: 0.4;
+    cursor: grabbing;
   }
 
   /* 답란 영역에 들어가 있는 칩 */
   .drop-target-area .word-chip {
     background-color: #1d4ed8;
+  }
+
+  /* SortableJS 애니메이션 & 피드백 클래스 */
+  .sortable-ghost {
+    opacity: 0.3;
+    background-color: #93c5fd !important;
+  }
+
+  .sortable-drag {
+    opacity: 0.9;
+    transform: scale(1.08);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2) !important;
   }
 
   .btn-group {
@@ -157,14 +161,7 @@
 <!-- 상단 섞인 단어 칩 영역 -->
 <div class="shuffled-box" id="shuffled-box">
     {% for word in shuffled %}
-        <span 
-            class="word-chip" 
-            draggable="true" 
-            data-word="{{ word }}" 
-            id="chip-{{ loop.index0 }}"
-        >
-            {{ word }}
-        </span>
+        <span class="word-chip" data-word="{{ word }}">{{ word }}</span>
     {% endfor %}
 </div>
 
@@ -202,140 +199,40 @@ const totalWords = chips.length;
 document.getElementById('total-words').textContent = totalWords;
 document.getElementById('wc-total').textContent = totalWords;
 
-let draggedChip = null;
-let isTouchMoved = false;
-
-// 1. 단어 칩 드래그, 클릭 및 터치 이벤트 바인딩
-chips.forEach(chip => {
-    setupChipEvents(chip);
-});
-
-function setupChipEvents(chip) {
-    // --- PC 마우스 드래그 이벤트 ---
-    chip.addEventListener('dragstart', (e) => {
-        draggedChip = chip;
-        chip.classList.add('dragging');
-        e.dataTransfer.setData('text/plain', chip.dataset.word);
-        e.dataTransfer.setData('chip-id', chip.id);
-    });
-
-    chip.addEventListener('dragend', () => {
-        chip.classList.remove('dragging');
-        draggedChip = null;
+// 1. SortableJS로 부드럽고 자연스러운 드래그 설정 (상단 ↔ 하단 연동)
+const sortableOptions = {
+    group: 'shared-words',  // 상단과 하단이 서로 단어를 주고받을 수 있게 함
+    animation: 200,         // 단어가 비켜설 때 부드러운 애니메이션 (ms)
+    ghostClass: 'sortable-ghost',
+    dragClass: 'sortable-drag',
+    delay: 0,
+    delayOnTouchOnly: false,
+    touchStartThreshold: 3,  // 살짝만 움직여도 즉시 부드럽게 드래그 반응
+    onEnd: function () {
         updateAnswerText();
-    });
+    }
+};
 
-    // --- PC 마우스 클릭 이벤트 ---
-    chip.addEventListener('click', (e) => {
-        // 터치 기반 기기에서는 touchstart/touchend로 처리되므로 클릭 중복 방지
-        if (e.pointerType === 'touch') return;
-        toggleChipPosition(chip);
-    });
+new Sortable(shuffledBox, sortableOptions);
+new Sortable(answerZone, sortableOptions);
 
-    // --- 모바일 터치(Touch) 지원 이벤트 ---
-    chip.addEventListener('touchstart', (e) => {
-        isTouchMoved = false;
-        draggedChip = chip;
-        chip.classList.add('dragging');
-    }, { passive: true });
+// 2. 터치/클릭 한번으로 상단 ↔ 하단 즉시 이동
+document.addEventListener('click', function (e) {
+    const chip = e.target.closest('.word-chip');
+    if (!chip) return;
 
-    chip.addEventListener('touchmove', (e) => {
-        isTouchMoved = true;
-        const touch = e.touches[0];
-        
-        // 답란 박스 안에서 터치 이동 시 위치 재배치
-        if (chip.parentElement === answerZone) {
-            const afterElement = getDragAfterElement(answerZone, touch.clientX, touch.clientY);
-            if (afterElement == null) {
-                answerZone.appendChild(chip);
-            } else {
-                answerZone.insertBefore(chip, afterElement);
-            }
-        }
-    }, { passive: true });
+    // 드래그 중 클릭이 발생하는 상황 방지
+    if (chip.classList.contains('sortable-drag')) return;
 
-    chip.addEventListener('touchend', (e) => {
-        chip.classList.remove('dragging');
-        
-        // 단순 터치(탭) 했을 경우 이동 실행
-        if (!isTouchMoved) {
-            toggleChipPosition(chip);
-        }
-        
-        draggedChip = null;
-        updateAnswerText();
-    });
-}
-
-function toggleChipPosition(chip) {
     if (chip.parentElement === shuffledBox) {
         answerZone.appendChild(chip);
-    } else {
+    } else if (chip.parentElement === answerZone) {
         shuffledBox.appendChild(chip);
     }
     updateAnswerText();
-}
+});
 
-// 2. PC 드롭존 (마우스 Drag over & Drop) 설정
-function setupDropZone(zone) {
-    zone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        zone.classList.add('drag-over');
-
-        if (zone === answerZone && draggedChip) {
-            const afterElement = getDragAfterElement(zone, e.clientX, e.clientY);
-            if (afterElement == null) {
-                zone.appendChild(draggedChip);
-            } else {
-                zone.insertBefore(draggedChip, afterElement);
-            }
-        }
-    });
-
-    zone.addEventListener('dragleave', () => {
-        zone.classList.remove('drag-over');
-    });
-
-    zone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        zone.classList.remove('drag-over');
-
-        const chipId = e.dataTransfer.getData('chip-id');
-        const chip = document.getElementById(chipId);
-
-        if (chip) {
-            if (zone === answerZone && chip.parentElement !== answerZone) {
-                answerZone.appendChild(chip);
-            } else if (zone === shuffledBox && chip.parentElement !== shuffledBox) {
-                shuffledBox.appendChild(chip);
-            }
-        }
-        updateAnswerText();
-    });
-}
-
-setupDropZone(shuffledBox);
-setupDropZone(answerZone);
-
-// 드래그/터치 위치 기반으로 삽입 위치 계산하는 함수
-function getDragAfterElement(container, x, y) {
-    const draggableElements = [...container.querySelectorAll('.word-chip:not(.dragging)')];
-
-    return draggableElements.reduce((closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offsetX = x - box.left - box.width / 2;
-        const offsetY = y - box.top - box.height / 2;
-        const distance = Math.hypot(offsetX, offsetY);
-
-        if (offsetX < 0 && distance < closest.distance) {
-            return { distance: distance, element: child };
-        } else {
-            return closest;
-        }
-    }, { distance: Number.POSITIVE_INFINITY }).element;
-}
-
-// 입력 텍스트 동기화 및 단어 수 업데이트
+// 3. 문장 입력값 및 단어 수 업데이트
 function updateAnswerText() {
     const answerChips = answerZone.querySelectorAll('.word-chip');
     const words = Array.from(answerChips).map(c => c.dataset.word);
@@ -347,7 +244,7 @@ function updateAnswerText() {
     document.getElementById('wc-total').textContent = totalWords;
 }
 
-// 지우기 (전체 초기화)
+// 4. 지우기 (전체 복원)
 function resetInput() {
     const answerChips = Array.from(answerZone.querySelectorAll('.word-chip'));
     answerChips.forEach(chip => {
@@ -364,7 +261,7 @@ function submitAnswer() {
     return true;
 }
 
-// 오답 발생 시 위치 비교 및 틀린 단어 하이라이트 표시
+// 5. 오답 발생 시 위치 비교 및 틀린 단어 하이라이트 표시
 {% if not is_correct and correct_answer and user_answer %}
 (function highlightDiff() {
     const correctAnswer = {{ correct_answer|tojson }};
