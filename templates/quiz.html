@@ -6,11 +6,11 @@
 
 {% block content %}
 
-<!-- 부드러운 모바일 드래그 앤 드롭을 위한 SortableJS 라이브러리 추가 -->
+<!-- 터치 반응성이 뛰어난 SortableJS -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
 <style>
-  /* 상단 및 하단 박스 공통 스타일 */
+  /* 영역 공통 스타일 */
   .shuffled-box,
   .drop-target-area {
     min-height: 80px;
@@ -24,10 +24,10 @@
     align-items: center;
     margin-bottom: 20px;
     transition: background-color 0.2s, border-color 0.2s;
-    touch-action: none; /* 터치 스크롤 방지하여 드래그에 집중 */
+    /* 모바일에서 화면 전체 스크롤과 터치 간섭 방지 */
+    touch-action: pan-y;
   }
 
-  /* 답란 영역 강조 */
   .drop-target-area {
     border-style: solid;
     border-color: #94a3b8;
@@ -47,29 +47,30 @@
     cursor: grab;
     user-select: none;
     -webkit-user-select: none;
+    -webkit-touch-callout: none;
     box-shadow: 0 2px 5px rgba(0,0,0,0.12);
-    transition: transform 0.15s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+    /* 드래그 중인 본체가 즉각 위치를 이동할 수 있도록 함 */
+    will-change: transform;
   }
 
-  .word-chip:active {
-    cursor: grabbing;
-  }
-
-  /* 답란 영역에 들어가 있는 칩 */
   .drop-target-area .word-chip {
     background-color: #1d4ed8;
   }
 
-  /* SortableJS 애니메이션 & 피드백 클래스 */
+  /* 드래그 중일 때 원래 자리에 남는 잔상(빈자리) 표시 */
   .sortable-ghost {
-    opacity: 0.3;
-    background-color: #93c5fd !important;
+    opacity: 0.25 !important;
+    background-color: #cbd5e1 !important;
   }
 
+  /* 진짜 내 손가락을 직접 따라다니는 단어 본체 */
   .sortable-drag {
-    opacity: 0.9;
-    transform: scale(1.08);
-    box-shadow: 0 8px 16px rgba(0,0,0,0.2) !important;
+    opacity: 1.0 !important;
+    background-color: #2563eb !important;
+    transform: scale(1.08) !important;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.25) !important;
+    cursor: grabbing !important;
+    z-index: 9999 !important;
   }
 
   .btn-group {
@@ -78,7 +79,7 @@
     margin-top: 15px;
   }
 
-  /* 피드백 상세 영역 스타일 */
+  /* 피드백 상세 영역 */
   .feedback-detail {
     margin-top: 10px;
     padding-top: 10px;
@@ -98,7 +99,6 @@
     width: 90px;
   }
 
-  /* 틀린 단어 하이라이트 */
   .wrong-word {
     background-color: #fecdd3;
     color: #e11d48;
@@ -161,16 +161,16 @@
 <!-- 상단 섞인 단어 칩 영역 -->
 <div class="shuffled-box" id="shuffled-box">
     {% for word in shuffled %}
+        <!-- draggable 속성을 제거하여 브라우저의 어색한 기본 영혼 잔상 제거 -->
         <span class="word-chip" data-word="{{ word }}">{{ word }}</span>
     {% endfor %}
 </div>
 
 <form method="post" onsubmit="return submitAnswer()">
     <div class="input-wrap">
-        <!-- 드래그 앤 드롭 및 터치 안착이 이뤄지는 답란 영역 -->
+        <!-- 답란 영역 -->
         <div class="drop-target-area" id="answer-zone"></div>
 
-        <!-- 폼 제출용 숨겨진 textarea -->
         <textarea
             name="answer"
             id="answer-input"
@@ -199,15 +199,17 @@ const totalWords = chips.length;
 document.getElementById('total-words').textContent = totalWords;
 document.getElementById('wc-total').textContent = totalWords;
 
-// 1. SortableJS로 부드럽고 자연스러운 드래그 설정 (상단 ↔ 하단 연동)
+// 1. 브라우저 기본 잔상을 없애고 진짜 본체가 부드럽게 따라오도록 설정
 const sortableOptions = {
-    group: 'shared-words',  // 상단과 하단이 서로 단어를 주고받을 수 있게 함
-    animation: 200,         // 단어가 비켜설 때 부드러운 애니메이션 (ms)
+    group: 'shared-words',
+    animation: 150,          // 자리가 비켜서는 속도 (자연스러움)
     ghostClass: 'sortable-ghost',
     dragClass: 'sortable-drag',
-    delay: 0,
-    delayOnTouchOnly: false,
-    touchStartThreshold: 3,  // 살짝만 움직여도 즉시 부드럽게 드래그 반응
+    forceFallback: true,     // ★ 핵심: 브라우저 기본 잔상(영혼)을 지우고 칩 본체가 움직이게 강제 설정
+    fallbackClass: 'sortable-drag',
+    fallbackOnBody: true,
+    fallbackTolerance: 3,     // 3px 이상 움직이면 바로 드래그 시작
+    scroll: false,            // 드래그 중 화면 혼란 방지
     onEnd: function () {
         updateAnswerText();
     }
@@ -216,13 +218,10 @@ const sortableOptions = {
 new Sortable(shuffledBox, sortableOptions);
 new Sortable(answerZone, sortableOptions);
 
-// 2. 터치/클릭 한번으로 상단 ↔ 하단 즉시 이동
+// 2. 터치/클릭 한 번으로 즉시 상단 ↔ 하단 이동
 document.addEventListener('click', function (e) {
     const chip = e.target.closest('.word-chip');
     if (!chip) return;
-
-    // 드래그 중 클릭이 발생하는 상황 방지
-    if (chip.classList.contains('sortable-drag')) return;
 
     if (chip.parentElement === shuffledBox) {
         answerZone.appendChild(chip);
@@ -232,7 +231,7 @@ document.addEventListener('click', function (e) {
     updateAnswerText();
 });
 
-// 3. 문장 입력값 및 단어 수 업데이트
+// 3. 입력값 및 단어 수 업데이트
 function updateAnswerText() {
     const answerChips = answerZone.querySelectorAll('.word-chip');
     const words = Array.from(answerChips).map(c => c.dataset.word);
@@ -244,7 +243,7 @@ function updateAnswerText() {
     document.getElementById('wc-total').textContent = totalWords;
 }
 
-// 4. 지우기 (전체 복원)
+// 4. 지우기
 function resetInput() {
     const answerChips = Array.from(answerZone.querySelectorAll('.word-chip'));
     answerChips.forEach(chip => {
@@ -261,7 +260,7 @@ function submitAnswer() {
     return true;
 }
 
-// 5. 오답 발생 시 위치 비교 및 틀린 단어 하이라이트 표시
+// 5. 오답 비교 표시
 {% if not is_correct and correct_answer and user_answer %}
 (function highlightDiff() {
     const correctAnswer = {{ correct_answer|tojson }};
