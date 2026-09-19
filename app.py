@@ -131,7 +131,7 @@ def quiz():
                 feedback=feedback,
                 is_correct=is_correct,
                 correct_answer=correct_answer,
-                user_answer=user_input if not is_correct else None
+                user_answer=user_input if not is_correct else None  # ✨ 오답 데이터 전달
             )
 
     sentence = sentences[current]
@@ -148,7 +148,7 @@ def quiz():
         feedback=feedback,
         is_correct=is_correct,
         correct_answer=correct_answer,
-        user_answer=user_input if (request.method == "POST" and not is_correct) else None
+        user_answer=user_input if (request.method == "POST" and not is_correct) else None  # ✨ 오답 데이터 전달
     )
 
 @app.route("/result")
