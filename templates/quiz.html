@@ -21,6 +21,7 @@
     align-items: center;
     margin-bottom: 20px;
     transition: background-color 0.2s, border-color 0.2s;
+    touch-action: manipulation;
   }
 
   /* 답란 영역 강조 */
@@ -36,34 +37,30 @@
     border-color: #3b82f6;
   }
 
-  /* 단어 칩 기본 스타일 */
+  /* 단어 칩 기본 스타일 - 터치 친화적 패딩 및 모바일 선택 방지 */
   .word-chip {
     display: inline-flex;
     align-items: center;
-    padding: 8px 14px;
+    padding: 10px 16px;
     background-color: #3b82f6;
     color: white;
     font-weight: 600;
     border-radius: 20px;
-    cursor: grab;
+    cursor: pointer;
     user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
     box-shadow: 0 2px 4px rgba(0,0,0,0.08);
     transition: transform 0.15s, opacity 0.15s, background-color 0.2s;
+    touch-action: none;
   }
 
   .word-chip:active {
-    cursor: grabbing;
+    transform: scale(1.05);
   }
 
   .word-chip.dragging {
-    opacity: 0.3;
-  }
-
-  /* 선택된 칩 (상단 박스에 남아있는 시각적 연출) */
-  .word-chip.selected {
-    background-color: #cbd5e1;
-    color: #64748b;
-    box-shadow: none;
+    opacity: 0.4;
   }
 
   /* 답란 영역에 들어가 있는 칩 */
@@ -173,7 +170,7 @@
 
 <form method="post" onsubmit="return submitAnswer()">
     <div class="input-wrap">
-        <!-- 드래그 앤 드롭 안착 및 순서 변경이 이뤄지는 답란 영역 -->
+        <!-- 드래그 앤 드롭 및 터치 안착이 이뤄지는 답란 영역 -->
         <div class="drop-target-area" id="answer-zone"></div>
 
         <!-- 폼 제출용 숨겨진 textarea -->
@@ -206,13 +203,15 @@ document.getElementById('total-words').textContent = totalWords;
 document.getElementById('wc-total').textContent = totalWords;
 
 let draggedChip = null;
+let isTouchMoved = false;
 
-// 초기 드래그 & 클릭 이벤트 할당
+// 1. 단어 칩 드래그, 클릭 및 터치 이벤트 바인딩
 chips.forEach(chip => {
     setupChipEvents(chip);
 });
 
 function setupChipEvents(chip) {
+    // --- PC 마우스 드래그 이벤트 ---
     chip.addEventListener('dragstart', (e) => {
         draggedChip = chip;
         chip.classList.add('dragging');
@@ -226,17 +225,58 @@ function setupChipEvents(chip) {
         updateAnswerText();
     });
 
-    chip.addEventListener('click', () => {
-        // 클릭 시 상단 <-> 하단 이동 토글
-        if (chip.parentElement === shuffledBox) {
-            moveChipToAnswer(chip);
-        } else {
-            returnChipToShuffled(chip);
+    // --- PC 마우스 클릭 이벤트 ---
+    chip.addEventListener('click', (e) => {
+        // 터치 기반 기기에서는 touchstart/touchend로 처리되므로 클릭 중복 방지
+        if (e.pointerType === 'touch') return;
+        toggleChipPosition(chip);
+    });
+
+    // --- 모바일 터치(Touch) 지원 이벤트 ---
+    chip.addEventListener('touchstart', (e) => {
+        isTouchMoved = false;
+        draggedChip = chip;
+        chip.classList.add('dragging');
+    }, { passive: true });
+
+    chip.addEventListener('touchmove', (e) => {
+        isTouchMoved = true;
+        const touch = e.touches[0];
+        
+        // 답란 박스 안에서 터치 이동 시 위치 재배치
+        if (chip.parentElement === answerZone) {
+            const afterElement = getDragAfterElement(answerZone, touch.clientX, touch.clientY);
+            if (afterElement == null) {
+                answerZone.appendChild(chip);
+            } else {
+                answerZone.insertBefore(chip, afterElement);
+            }
         }
+    }, { passive: true });
+
+    chip.addEventListener('touchend', (e) => {
+        chip.classList.remove('dragging');
+        
+        // 단순 터치(탭) 했을 경우 이동 실행
+        if (!isTouchMoved) {
+            toggleChipPosition(chip);
+        }
+        
+        draggedChip = null;
+        updateAnswerText();
     });
 }
 
-// 드롭존(상단/하단) 설정 함수
+function toggleChipPosition(chip) {
+    if (chip.parentElement === shuffledBox) {
+        answerZone.appendChild(chip);
+    } else {
+        shuffledBox.appendChild(chip);
+    }
+    updateAnswerText();
+}
+
+// 2. PC 드롭존 (마우스 Drag over & Drop) 설정
 function setupDropZone(zone) {
     zone.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -264,10 +304,10 @@ function setupDropZone(zone) {
         const chip = document.getElementById(chipId);
 
         if (chip) {
-            if (zone === answerZone) {
-                moveChipToAnswer(chip);
-            } else if (zone === shuffledBox) {
-                returnChipToShuffled(chip);
+            if (zone === answerZone && chip.parentElement !== answerZone) {
+                answerZone.appendChild(chip);
+            } else if (zone === shuffledBox && chip.parentElement !== shuffledBox) {
+                shuffledBox.appendChild(chip);
             }
         }
         updateAnswerText();
@@ -277,7 +317,7 @@ function setupDropZone(zone) {
 setupDropZone(shuffledBox);
 setupDropZone(answerZone);
 
-// 드래그 마우스 위치에 따라 위치 결정하는 함수
+// 드래그/터치 위치 기반으로 삽입 위치 계산하는 함수
 function getDragAfterElement(container, x, y) {
     const draggableElements = [...container.querySelectorAll('.word-chip:not(.dragging)')];
 
@@ -285,8 +325,6 @@ function getDragAfterElement(container, x, y) {
         const box = child.getBoundingClientRect();
         const offsetX = x - box.left - box.width / 2;
         const offsetY = y - box.top - box.height / 2;
-        
-        // 거리 계산 (x, y축 조합)
         const distance = Math.hypot(offsetX, offsetY);
 
         if (offsetX < 0 && distance < closest.distance) {
@@ -295,22 +333,6 @@ function getDragAfterElement(container, x, y) {
             return closest;
         }
     }, { distance: Number.POSITIVE_INFINITY }).element;
-}
-
-// 답란으로 이동
-function moveChipToAnswer(chip) {
-    if (chip.parentElement !== answerZone) {
-        answerZone.appendChild(chip);
-    }
-    chip.classList.remove('selected');
-    updateAnswerText();
-}
-
-// 원위치(상단)로 복원
-function returnChipToShuffled(chip) {
-    shuffledBox.appendChild(chip);
-    chip.classList.remove('selected');
-    updateAnswerText();
 }
 
 // 입력 텍스트 동기화 및 단어 수 업데이트
@@ -330,14 +352,13 @@ function resetInput() {
     const answerChips = Array.from(answerZone.querySelectorAll('.word-chip'));
     answerChips.forEach(chip => {
         shuffledBox.appendChild(chip);
-        chip.classList.remove('selected');
     });
     updateAnswerText();
 }
 
 function submitAnswer() {
     if (answerInput.value.trim() === '') {
-        alert('단어를 이동시켜 문장을 완성해주세요.');
+        alert('단어를 선택하여 문장을 완성해주세요.');
         return false;
     }
     return true;
