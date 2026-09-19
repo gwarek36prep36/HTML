@@ -21,13 +21,11 @@
     margin-bottom: 20px;
   }
 
-  /* 드래그해서 입력 영역 위로 가져왔을 때 표시 */
   .drop-target-area.drag-over textarea {
     background-color: #e8f4fe;
     border-color: #3b82f6;
   }
 
-  /* 단어 칩 기본 스타일 */
   .word-chip {
     display: inline-block;
     padding: 8px 14px;
@@ -49,7 +47,6 @@
     opacity: 0.4;
   }
 
-  /* 드래그/클릭되어 입력창에 안착 및 고정된 칩 */
   .word-chip.used {
     background-color: #9ca3af;
     opacity: 0.5;
@@ -61,6 +58,41 @@
     gap: 10px;
     margin-top: 15px;
   }
+
+  /* 피드백 상세 영역 스타일 */
+  .feedback-detail {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed rgba(0,0,0,0.15);
+    text-align: left;
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+
+  .feedback-row {
+    margin-bottom: 6px;
+  }
+
+  .feedback-label {
+    font-weight: bold;
+    display: inline-block;
+    width: 90px;
+  }
+
+  /* 틀린 단어 하이라이트 */
+  .wrong-word {
+    background-color: #fecdd3;
+    color: #e11d48;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: bold;
+    text-decoration: underline;
+  }
+
+  .correct-word {
+    color: #16a34a;
+    font-weight: bold;
+  }
 </style>
 
 <h1>🔀 섞인 문장</h1>
@@ -71,11 +103,19 @@
 
 {% if feedback %}
     <div class="feedback {{ 'correct' if is_correct else 'wrong' }}">
-        {{ feedback }}
-        {% if correct_answer %}
-            <span class="correct-answer">
-                정답: {{ correct_answer }}
-            </span>
+        <div style="font-size: 1.2rem; font-weight: bold;">{{ feedback }}</div>
+        
+        {% if not is_correct and correct_answer %}
+            <div class="feedback-detail">
+                <div class="feedback-row">
+                    <span class="feedback-label">📌 정답:</span>
+                    <span class="correct-word">{{ correct_answer }}</span>
+                </div>
+                <div class="feedback-row">
+                    <span class="feedback-label">❌ 내가 낸 답:</span>
+                    <span id="highlighted-user-answer"></span>
+                </div>
+            </div>
         {% endif %}
     </div>
 {% endif %}
@@ -173,7 +213,7 @@ dropZone.addEventListener('drop', (e) => {
     }
 });
 
-// 3. 클릭 시에도 안착 되도록 처리
+// 3. 클릭 시 안착
 function handleChipClick(chip) {
     if (chip.classList.contains('used')) return;
 
@@ -182,7 +222,6 @@ function handleChipClick(chip) {
     markChipAsUsed(chip);
 }
 
-// 텍스트 상자에 단어 붙이기
 function appendWordToInput(word) {
     const currentText = answerInput.value;
     if (currentText.length > 0 && !currentText.endsWith(' ')) {
@@ -194,13 +233,11 @@ function appendWordToInput(word) {
     updateCount();
 }
 
-// 안착된 칩 고정 (비활성화)
 function markChipAsUsed(chip) {
     chip.classList.add('used');
     chip.setAttribute('draggable', 'false');
 }
 
-// 단어 수 세기
 function updateCount() {
     const val = answerInput.value.trim();
     const count = val === '' ? 0 : val.split(/\s+/).length;
@@ -209,7 +246,6 @@ function updateCount() {
     document.getElementById('wc-total').textContent = totalWords;
 }
 
-// 입력 지우기 / 칩 리셋
 function resetInput() {
     answerInput.value = '';
     chips.forEach(chip => {
@@ -223,6 +259,30 @@ function resetInput() {
 function submitAnswer() {
     return true;
 }
+
+// 오답 발생 시 위치 비교 및 틀린 단어 하이라이트 표시
+{% if not is_correct and correct_answer and user_answer %}
+(function highlightDiff() {
+    const correctAnswer = {{ correct_answer|tojson }};
+    const userAnswer = {{ user_answer|tojson }};
+    
+    const correctWords = correctAnswer.split(/\s+/);
+    const userWords = userAnswer.split(/\s+/);
+    
+    const container = document.getElementById('highlighted-user-answer');
+    if (!container) return;
+
+    const resultHtml = userWords.map((word, idx) => {
+        // 정답 단어 순서와 일치하지 않는 경우 하이라이트
+        if (idx >= correctWords.length || word !== correctWords[idx]) {
+            return `<span class="wrong-word">${word}</span>`;
+        }
+        return word;
+    }).join(' ');
+
+    container.innerHTML = resultHtml;
+})();
+{% endif %}
 </script>
 
 {% endblock %}
