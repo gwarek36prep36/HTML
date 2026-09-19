@@ -7,27 +7,39 @@
 {% block content %}
 
 <style>
-  /* 드래그 앤 드롭 안착 전용 스타일 */
-  .shuffled-box {
+  /* 상단 및 하단 박스 공통 스타일 */
+  .shuffled-box,
+  .drop-target-area {
     min-height: 80px;
     padding: 15px;
-    border: 2px dashed #ddd;
+    border: 2px dashed #cbd5e1;
     border-radius: 12px;
-    background-color: #fafafa;
+    background-color: #f8fafc;
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
     margin-bottom: 20px;
+    transition: background-color 0.2s, border-color 0.2s;
   }
 
-  .drop-target-area.drag-over textarea {
-    background-color: #e8f4fe;
+  /* 답란 영역 강조 */
+  .drop-target-area {
+    border-style: solid;
+    border-color: #94a3b8;
+    background-color: #ffffff;
+  }
+
+  .drop-target-area.drag-over,
+  .shuffled-box.drag-over {
+    background-color: #eff6ff;
     border-color: #3b82f6;
   }
 
+  /* 단어 칩 기본 스타일 */
   .word-chip {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
     padding: 8px 14px;
     background-color: #3b82f6;
     color: white;
@@ -35,8 +47,8 @@
     border-radius: 20px;
     cursor: grab;
     user-select: none;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    transition: background-color 0.2s, opacity 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    transition: transform 0.15s, opacity 0.15s, background-color 0.2s;
   }
 
   .word-chip:active {
@@ -44,13 +56,19 @@
   }
 
   .word-chip.dragging {
-    opacity: 0.4;
+    opacity: 0.3;
   }
 
-  .word-chip.used {
-    background-color: #9ca3af;
-    opacity: 0.5;
-    cursor: not-allowed;
+  /* 선택된 칩 (상단 박스에 남아있는 시각적 연출) */
+  .word-chip.selected {
+    background-color: #cbd5e1;
+    color: #64748b;
+    box-shadow: none;
+  }
+
+  /* 답란 영역에 들어가 있는 칩 */
+  .drop-target-area .word-chip {
+    background-color: #1d4ed8;
   }
 
   .btn-group {
@@ -93,6 +111,21 @@
     color: #16a34a;
     font-weight: bold;
   }
+
+  .input-wrap {
+    position: relative;
+  }
+
+  .count-badge {
+    position: absolute;
+    bottom: 12px;
+    right: 15px;
+    font-size: 0.85rem;
+    color: #64748b;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
 </style>
 
 <h1>🔀 섞인 문장</h1>
@@ -124,7 +157,7 @@
     총 <strong id="total-words">0</strong> 단어
 </div>
 
-<!-- 드래그할 단어 칩들 -->
+<!-- 상단 섞인 단어 칩 영역 -->
 <div class="shuffled-box" id="shuffled-box">
     {% for word in shuffled %}
         <span 
@@ -132,7 +165,6 @@
             draggable="true" 
             data-word="{{ word }}" 
             id="chip-{{ loop.index0 }}"
-            onclick="handleChipClick(this)"
         >
             {{ word }}
         </span>
@@ -140,16 +172,16 @@
 </div>
 
 <form method="post" onsubmit="return submitAnswer()">
-    <div class="input-wrap drop-target-area" id="drop-zone">
+    <div class="input-wrap">
+        <!-- 드래그 앤 드롭 안착 및 순서 변경이 이뤄지는 답란 영역 -->
+        <div class="drop-target-area" id="answer-zone"></div>
+
+        <!-- 폼 제출용 숨겨진 textarea -->
         <textarea
             name="answer"
             id="answer-input"
-            rows="5"
-            placeholder="단어 칩을 드래그하거나 클릭하여 안착시키세요."
-            autocomplete="off"
-            autofocus
+            style="display: none;"
             required
-            oninput="updateCount()"
         ></textarea>
 
         <span class="count-badge" id="word-count">
@@ -164,21 +196,25 @@
 </form>
 
 <script>
-const chips = document.querySelectorAll('.word-chip');
+const shuffledBox = document.getElementById('shuffled-box');
+const answerZone = document.getElementById('answer-zone');
 const answerInput = document.getElementById('answer-input');
-const dropZone = document.getElementById('drop-zone');
+const chips = document.querySelectorAll('.word-chip');
 const totalWords = chips.length;
 
 document.getElementById('total-words').textContent = totalWords;
 document.getElementById('wc-total').textContent = totalWords;
 
-// 1. 단어 칩 드래그 이벤트
+let draggedChip = null;
+
+// 초기 드래그 & 클릭 이벤트 할당
 chips.forEach(chip => {
+    setupChipEvents(chip);
+});
+
+function setupChipEvents(chip) {
     chip.addEventListener('dragstart', (e) => {
-        if (chip.classList.contains('used')) {
-            e.preventDefault();
-            return;
-        }
+        draggedChip = chip;
         chip.classList.add('dragging');
         e.dataTransfer.setData('text/plain', chip.dataset.word);
         e.dataTransfer.setData('chip-id', chip.id);
@@ -186,77 +222,124 @@ chips.forEach(chip => {
 
     chip.addEventListener('dragend', () => {
         chip.classList.remove('dragging');
+        draggedChip = null;
+        updateAnswerText();
     });
-});
 
-// 2. 입력창 드롭(안착) 이벤트
-dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropZone.classList.add('drag-over');
-});
+    chip.addEventListener('click', () => {
+        // 클릭 시 상단 <-> 하단 이동 토글
+        if (chip.parentElement === shuffledBox) {
+            moveChipToAnswer(chip);
+        } else {
+            returnChipToShuffled(chip);
+        }
+    });
+}
 
-dropZone.addEventListener('dragleave', () => {
-    dropZone.classList.remove('drag-over');
-});
+// 드롭존(상단/하단) 설정 함수
+function setupDropZone(zone) {
+    zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        zone.classList.add('drag-over');
 
-dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.classList.remove('drag-over');
+        if (zone === answerZone && draggedChip) {
+            const afterElement = getDragAfterElement(zone, e.clientX, e.clientY);
+            if (afterElement == null) {
+                zone.appendChild(draggedChip);
+            } else {
+                zone.insertBefore(draggedChip, afterElement);
+            }
+        }
+    });
 
-    const word = e.dataTransfer.getData('text/plain');
-    const chipId = e.dataTransfer.getData('chip-id');
-    const targetChip = document.getElementById(chipId);
+    zone.addEventListener('dragleave', () => {
+        zone.classList.remove('drag-over');
+    });
 
-    if (word && targetChip && !targetChip.classList.contains('used')) {
-        appendWordToInput(word);
-        markChipAsUsed(targetChip);
+    zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        zone.classList.remove('drag-over');
+
+        const chipId = e.dataTransfer.getData('chip-id');
+        const chip = document.getElementById(chipId);
+
+        if (chip) {
+            if (zone === answerZone) {
+                moveChipToAnswer(chip);
+            } else if (zone === shuffledBox) {
+                returnChipToShuffled(chip);
+            }
+        }
+        updateAnswerText();
+    });
+}
+
+setupDropZone(shuffledBox);
+setupDropZone(answerZone);
+
+// 드래그 마우스 위치에 따라 위치 결정하는 함수
+function getDragAfterElement(container, x, y) {
+    const draggableElements = [...container.querySelectorAll('.word-chip:not(.dragging)')];
+
+    return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offsetX = x - box.left - box.width / 2;
+        const offsetY = y - box.top - box.height / 2;
+        
+        // 거리 계산 (x, y축 조합)
+        const distance = Math.hypot(offsetX, offsetY);
+
+        if (offsetX < 0 && distance < closest.distance) {
+            return { distance: distance, element: child };
+        } else {
+            return closest;
+        }
+    }, { distance: Number.POSITIVE_INFINITY }).element;
+}
+
+// 답란으로 이동
+function moveChipToAnswer(chip) {
+    if (chip.parentElement !== answerZone) {
+        answerZone.appendChild(chip);
     }
-});
-
-// 3. 클릭 시 안착
-function handleChipClick(chip) {
-    if (chip.classList.contains('used')) return;
-
-    const word = chip.dataset.word;
-    appendWordToInput(word);
-    markChipAsUsed(chip);
+    chip.classList.remove('selected');
+    updateAnswerText();
 }
 
-function appendWordToInput(word) {
-    const currentText = answerInput.value;
-    if (currentText.length > 0 && !currentText.endsWith(' ')) {
-        answerInput.value += ' ' + word;
-    } else {
-        answerInput.value += word;
-    }
-    answerInput.focus();
-    updateCount();
+// 원위치(상단)로 복원
+function returnChipToShuffled(chip) {
+    shuffledBox.appendChild(chip);
+    chip.classList.remove('selected');
+    updateAnswerText();
 }
 
-function markChipAsUsed(chip) {
-    chip.classList.add('used');
-    chip.setAttribute('draggable', 'false');
-}
+// 입력 텍스트 동기화 및 단어 수 업데이트
+function updateAnswerText() {
+    const answerChips = answerZone.querySelectorAll('.word-chip');
+    const words = Array.from(answerChips).map(c => c.dataset.word);
+    
+    answerInput.value = words.join(' ');
 
-function updateCount() {
-    const val = answerInput.value.trim();
-    const count = val === '' ? 0 : val.split(/\s+/).length;
-
+    const count = words.length;
     document.getElementById('word-count').childNodes[0].textContent = count + ' / ';
     document.getElementById('wc-total').textContent = totalWords;
 }
 
+// 지우기 (전체 초기화)
 function resetInput() {
-    answerInput.value = '';
-    chips.forEach(chip => {
-        chip.classList.remove('used');
-        chip.setAttribute('draggable', 'true');
+    const answerChips = Array.from(answerZone.querySelectorAll('.word-chip'));
+    answerChips.forEach(chip => {
+        shuffledBox.appendChild(chip);
+        chip.classList.remove('selected');
     });
-    updateCount();
-    answerInput.focus();
+    updateAnswerText();
 }
 
 function submitAnswer() {
+    if (answerInput.value.trim() === '') {
+        alert('단어를 이동시켜 문장을 완성해주세요.');
+        return false;
+    }
     return true;
 }
 
@@ -273,7 +356,6 @@ function submitAnswer() {
     if (!container) return;
 
     const resultHtml = userWords.map((word, idx) => {
-        // 정답 단어 순서와 일치하지 않는 경우 하이라이트
         if (idx >= correctWords.length || word !== correctWords[idx]) {
             return `<span class="wrong-word">${word}</span>`;
         }
