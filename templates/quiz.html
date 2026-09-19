@@ -4,178 +4,225 @@
 문장 순서 맞추기
 {% endblock %}
 
-
 {% block content %}
 
-<h1>🔀 섞인 문장</h1>
+<style>
+  /* 드래그 앤 드롭 안착 전용 스타일 */
+  .shuffled-box {
+    min-height: 80px;
+    padding: 15px;
+    border: 2px dashed #ddd;
+    border-radius: 12px;
+    background-color: #fafafa;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 20px;
+  }
 
+  /* 드래그해서 입력 영역 위로 가져왔을 때 표시 */
+  .drop-target-area.drag-over textarea {
+    background-color: #e8f4fe;
+    border-color: #3b82f6;
+  }
+
+  /* 단어 칩 기본 스타일 */
+  .word-chip {
+    display: inline-block;
+    padding: 8px 14px;
+    background-color: #3b82f6;
+    color: white;
+    font-weight: 600;
+    border-radius: 20px;
+    cursor: grab;
+    user-select: none;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    transition: background-color 0.2s, opacity 0.2s;
+  }
+
+  .word-chip:active {
+    cursor: grabbing;
+  }
+
+  .word-chip.dragging {
+    opacity: 0.4;
+  }
+
+  /* 드래그/클릭되어 입력창에 안착 및 고정된 칩 */
+  .word-chip.used {
+    background-color: #9ca3af;
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+  }
+</style>
+
+<h1>🔀 섞인 문장</h1>
 
 <div class="progress">
     문제 {{ progress }} / {{ total }}
 </div>
 
-
 {% if feedback %}
-
-    <div
-        class="feedback
-        {{ 'correct' if is_correct else 'wrong' }}"
-    >
-
+    <div class="feedback {{ 'correct' if is_correct else 'wrong' }}">
         {{ feedback }}
-
         {% if correct_answer %}
-
             <span class="correct-answer">
                 정답: {{ correct_answer }}
             </span>
-
         {% endif %}
-
     </div>
-
 {% endif %}
 
-
 <div class="word-count-info">
-
-    총
-    <strong id="total-words">0</strong>
-    단어
-
+    총 <strong id="total-words">0</strong> 단어
 </div>
 
-
-<div
-    class="shuffled-box"
-    id="shuffled-box"
->
-
+<!-- 드래그할 단어 칩들 -->
+<div class="shuffled-box" id="shuffled-box">
     {% for word in shuffled %}
-
-        <span
-            class="word-chip"
-            onclick="toggleWord(this)"
+        <span 
+            class="word-chip" 
+            draggable="true" 
+            data-word="{{ word }}" 
+            id="chip-{{ loop.index0 }}"
+            onclick="handleChipClick(this)"
         >
             {{ word }}
         </span>
-
     {% endfor %}
-
 </div>
 
-
-<form
-    method="post"
-    onsubmit="return submitAnswer()"
->
-
-
-    <div class="input-wrap">
-
+<form method="post" onsubmit="return submitAnswer()">
+    <div class="input-wrap drop-target-area" id="drop-zone">
         <textarea
             name="answer"
             id="answer-input"
-            rows="8"
-            placeholder="올바른 순서로 입력하세요"
+            rows="5"
+            placeholder="단어 칩을 드래그하거나 클릭하여 안착시키세요."
             autocomplete="off"
             autofocus
             required
             oninput="updateCount()"
         ></textarea>
 
-
-        <span
-            class="count-badge"
-            id="word-count"
-        >
-            0 /
-            <span id="wc-total">0</span>
+        <span class="count-badge" id="word-count">
+            0 / <span id="wc-total">0</span>
         </span>
-
     </div>
 
-
-    <button type="submit">
-        제출
-    </button>
-
-
+    <div class="btn-group">
+        <button type="submit">제출</button>
+        <button type="button" class="secondary-btn" onclick="resetInput()">지우기</button>
+    </div>
 </form>
 
-
 <script>
+const chips = document.querySelectorAll('.word-chip');
+const answerInput = document.getElementById('answer-input');
+const dropZone = document.getElementById('drop-zone');
+const totalWords = chips.length;
 
-const chips =
-    document.querySelectorAll(
-        '.word-chip'
-    );
+document.getElementById('total-words').textContent = totalWords;
+document.getElementById('wc-total').textContent = totalWords;
 
+// 1. 단어 칩 드래그 이벤트
+chips.forEach(chip => {
+    chip.addEventListener('dragstart', (e) => {
+        if (chip.classList.contains('used')) {
+            e.preventDefault();
+            return;
+        }
+        chip.classList.add('dragging');
+        e.dataTransfer.setData('text/plain', chip.dataset.word);
+        e.dataTransfer.setData('chip-id', chip.id);
+    });
 
-const totalWords =
-    chips.length;
+    chip.addEventListener('dragend', () => {
+        chip.classList.remove('dragging');
+    });
+});
 
+// 2. 입력창 드롭(안착) 이벤트
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+});
 
-document.getElementById(
-    'total-words'
-).textContent = totalWords;
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('drag-over');
+});
 
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
 
-document.getElementById(
-    'wc-total'
-).textContent = totalWords;
+    const word = e.dataTransfer.getData('text/plain');
+    const chipId = e.dataTransfer.getData('chip-id');
+    const targetChip = document.getElementById(chipId);
 
+    if (word && targetChip && !targetChip.classList.contains('used')) {
+        appendWordToInput(word);
+        markChipAsUsed(targetChip);
+    }
+});
 
-function toggleWord(el) {
+// 3. 클릭 시에도 안착 되도록 처리
+function handleChipClick(chip) {
+    if (chip.classList.contains('used')) return;
 
-    el.classList.toggle('used');
-
-    document
-        .getElementById('answer-input')
-        .focus();
-
+    const word = chip.dataset.word;
+    appendWordToInput(word);
+    markChipAsUsed(chip);
 }
 
+// 텍스트 상자에 단어 붙이기
+function appendWordToInput(word) {
+    const currentText = answerInput.value;
+    if (currentText.length > 0 && !currentText.endsWith(' ')) {
+        answerInput.value += ' ' + word;
+    } else {
+        answerInput.value += word;
+    }
+    answerInput.focus();
+    updateCount();
+}
 
+// 안착된 칩 고정 (비활성화)
+function markChipAsUsed(chip) {
+    chip.classList.add('used');
+    chip.setAttribute('draggable', 'false');
+}
+
+// 단어 수 세기
 function updateCount() {
+    const val = answerInput.value.trim();
+    const count = val === '' ? 0 : val.split(/\s+/).length;
 
-    const val =
-        document
-        .getElementById('answer-input')
-        .value
-        .trim();
-
-
-    const count =
-        val === ''
-        ? 0
-        : val.split(/\s+/).length;
-
-
-    document.getElementById(
-        'word-count'
-    ).childNodes[0].textContent =
-        count + ' / ';
-
-
-    document.getElementById(
-        'wc-total'
-    ).textContent =
-        totalWords;
-
+    document.getElementById('word-count').childNodes[0].textContent = count + ' / ';
+    document.getElementById('wc-total').textContent = totalWords;
 }
 
+// 입력 지우기 / 칩 리셋
+function resetInput() {
+    answerInput.value = '';
+    chips.forEach(chip => {
+        chip.classList.remove('used');
+        chip.setAttribute('draggable', 'true');
+    });
+    updateCount();
+    answerInput.focus();
+}
 
 function submitAnswer() {
-
-    chips.forEach(
-        c => c.classList.remove('used')
-    );
-
     return true;
-
 }
-
 </script>
 
 {% endblock %}
